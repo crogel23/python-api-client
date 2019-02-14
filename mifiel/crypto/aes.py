@@ -24,8 +24,7 @@ class AES:
     except:
       pass
     aes = AES_CIPHER.new(password, cls.ALGORITHM, iv)
-    decrypted_data = unpad(aes.decrypt(encrypted_data), 16)
-    return decrypted_data.decode()
+    return unpad(aes.decrypt(encrypted_data), 16)
 
   @classmethod
   def random_iv(cls, length = 16):

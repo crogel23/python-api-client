@@ -37,7 +37,7 @@ class Base(object):
       if files:
         for file_name in files:
           file = files[file_name]
-          if file: file[1].close()
+          if file and type(file[1]) is not bytes: file[1].close()
     elif method == 'put':
       response = requests.put(url, auth=self.client.auth, json=data)
     elif method == 'get':

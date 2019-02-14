@@ -283,3 +283,64 @@ class TestDocument(BaseMifielCase):
     self.assertEqual(doc.id, doc_id)
     assert req.headers['Authorization'] is not None
     self.assertTrue(os.path.isfile(path))
+
+  def test_encrypted_with_missing_args(self):
+    signatories = [
+      {'email': 'some@email.com', 'tax_id': 'ASDD543412ERP'},
+      {'email': 'some@email1.com', 'tax_id': 'ASDD543413ERP'}
+    ]
+
+    # Master key needed on client
+    with self.assertRaises(ValueError):
+      Document.create(
+        client=self.client,
+        signatories=signatories,
+        file='test/fixtures/example.pdf',
+        dhash='f4dee35b52fc06aa9d47f6297c7cff51e8bcebf90683da234a07ed507dafd57b',
+        encrypted=True
+      )
+
+    # File needed
+    self.client.set_master_key('000102030405060708090a0b0c0d0e0f')
+    with self.assertRaises(ValueError):
+      Document.create(
+        client=self.client,
+        signatories=signatories,
+        dhash='some-sha256-hash',
+        encrypted=True
+      )
+
+    # Hash needed
+    with self.assertRaises(ValueError):
+      Document.create(
+        client=self.client,
+        signatories=signatories,
+        file='test/fixtures/example.pdf',
+        encrypted=True
+      )
+
+  @responses.activate
+  def test_encrypted_docs(self):
+    doc_id = 'some-doc-id'
+    url = self.client.url().format(path='documents')
+    self.mock_doc_response(responses.POST, url, doc_id)
+
+    self.client.set_master_key('000102030405060708090a0b0c0d0e0f')
+
+    signatories = [
+      {'email': 'some@email.com', 'tax_id': 'ASDD543412ERP'},
+      {'email': 'some@email1.com', 'tax_id': 'ASDD543413ERP'}
+    ]
+    doc = Document.create(
+      client=self.client,
+      signatories=signatories,
+      file='test/fixtures/example.pdf',
+      dhash='f4dee35b52fc06aa9d47f6297c7cff51e8bcebf90683da234a07ed507dafd57b',
+      encrypted=True
+    )
+
+    req = self.get_last_request()
+    self.assertEqual(req.method, 'POST')
+    self.assertEqual(req.url, url)
+    self.assertEqual(doc.id, doc_id)
+    assert req.headers['Authorization'] is not None

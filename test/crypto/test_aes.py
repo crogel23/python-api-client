@@ -88,4 +88,4 @@ class TestAES(BaseTestCase):
   def test_decrypt(self):
     for test in self.FIXTURES:
       result = AES.decrypt(test['key'], test['encrypted'], test['iv'])
-      assert result == test['dataToEncrypt']
+      assert result.decode() == test['dataToEncrypt']

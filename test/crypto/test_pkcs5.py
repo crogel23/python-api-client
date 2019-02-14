@@ -43,7 +43,7 @@ the selection of passwords are also outside the scope.	"""
     for test in self.FIXTURES:
       pkcs5 = PKCS5(test['data'])
       decrypted_data = pkcs5.decrypt_data(test['password'])
-      assert decrypted_data == self.DECRYPTED_MESSAGE
+      assert decrypted_data.decode() == self.DECRYPTED_MESSAGE
 
   def test_pkcs5_load_from_dict(self):
     test = self.FIXTURES[0]
@@ -58,7 +58,7 @@ the selection of passwords are also outside the scope.	"""
     asn1_hex = pkcs5.dump_asn1()
     decrypted_data = pkcs5.decrypt_data(test['password'])
     assert asn1_hex == test['data']
-    assert decrypted_data == self.DECRYPTED_MESSAGE
+    assert decrypted_data.decode() == self.DECRYPTED_MESSAGE
 
 
   def test_pkcs5_exceptions(self):

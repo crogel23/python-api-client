@@ -1,11 +1,12 @@
 asn1crypto==0.24.0
+bip32utils==0.3.post4
 coincurve==11.0.0
 cookies==2.2.1
 cov-core==1.15.0
 coverage==4.1
 nose2==0.6.4
-pypandoc==1.4
 pycryptodome==3.7.3
+pypandoc==1.4
 requests==2.21.0
 responses==0.9.0
 six==1.10.0

@@ -1,7 +1,9 @@
-from mifiel import Base, Response
 import mimetypes
-from os.path import basename
 import requests
+from bip32utils import BIP32_HARDEN
+from os.path import basename
+from mifiel import Base, Response
+from mifiel.crypto import AES, PBE, PKCS5, ECIES
 
 class Document(Base):
   def __init__(self, client):
@@ -25,13 +27,8 @@ class Document(Base):
     return result
 
   @staticmethod
-  def create(client, signatories, file=None, dhash=None, callback_url=None, name=None):
-    if not file and not dhash:
-      raise ValueError('Either file or hash must be provided')
-    if file and dhash:
-      raise ValueError('Only one of file or hash must be provided')
-    if dhash and not name:
-      raise ValueError('A name is required when using hash')
+  def create(client, signatories, file=None, dhash=None, callback_url=None, name=None, encrypted=False):
+    Document.__validate_create(client, name, file, dhash, encrypted)
 
     sig_numbers = {}
 
@@ -44,15 +41,14 @@ class Document(Base):
     data = sig_numbers
 
     if callback_url: data['callback_url'] = callback_url
-    if file:
-      mimetype = mimetypes.guess_type(file)[0]
-      _file = open(file, 'rb')
-      file = {'file': (basename(_file.name), _file, mimetype)}
+    if file: file, random_password = Document.__prepare_file_to_store(file, encrypted)
     if dhash: data['original_hash'] = dhash
     if name: data['name'] = name
 
     doc = Document(client)
     doc.process_request('post', data=data, files=file)
+    if encrypted:
+      doc.__cipher_doc_secrets(client.master_key, random_password)
     return doc
 
   def request_signature(self, signer, cc=None):
@@ -103,3 +99,76 @@ class Document(Base):
     response = requests.get(url_, auth=self.client.auth)
     with open(path, 'w') as file_:
       file_.write(response.text)
+
+  def __cipher_doc_secrets(self, master_key, random_password):
+    # Document.__key_derivation(master_key, doc, signer)
+    return
+    signatories = {}
+    for signer in self.signers:
+      signer_id = signer.id
+      public_key_hex = signer.e2ee.group.e_client.pub
+      e_pass = ECIES.encrypt(public_key_hex, random_password)
+      signatories[signer_id] = {
+        'e_client': {
+          'e_pass': e_pass
+        }
+      }
+    self.signatories = signatories
+    self.save()
+
+  @staticmethod
+  def __key_derivation(master_key, doc, signer):
+    node = master_key.CKDpriv(doc + BIP32_HARDEN).CKDpub(signer)
+    return node.PublicKey().hex()
+
+  @staticmethod
+  def __validate_create(client, name, file, dhash, encrypted):
+    if not file and not dhash:
+      raise ValueError('Either file or hash must be provided')
+    if encrypted:
+      if client.master_key is None:
+        raise ValueError('Master key is needed to create encrypted documents. client.set_master_key(seed_as_hex_string)')
+      elif not file or not dhash:
+        raise ValueError('Both file and dhash are required for encrypted documents')
+    else:
+      if file and dhash:
+        raise ValueError('Only one of file or hash must be provided')
+      if dhash and not name:
+        raise ValueError('A name is required when using hash')
+
+  @staticmethod
+  def __prepare_file_to_store(file_path, encrypted):
+    random_password = None
+    original_file = open(file_path, 'rb')
+    filename = basename(original_file.name)
+    mimetype = 'text/plain' if encrypted else mimetypes.guess_type(file_path)[0]
+    file_data = Document.__encrypt_file(original_file) if encrypted else original_file
+    if encrypted:
+      filename += '.enc'
+      file_data, random_password = file_data
+    return (
+      {'file': (filename, file_data, mimetype)},
+      random_password
+    )
+
+  @staticmethod
+  def __encrypt_file(file):
+    random_iv = AES.random_iv()
+    random_salt = PBE.random_salt()
+    random_password = PBE.random_password()
+    derived_key = PBE.get_derived_key(random_password, salt=random_salt)
+    file_bytes = file.read()
+    encrypted_doc = AES.encrypt(derived_key, file_bytes, random_iv)
+    pkcs5_attrs = {
+      'iv': random_iv,
+      'salt': random_salt,
+      'iterations': 1000,
+      'key_size': PKCS5.AES_256_CBC_OID,
+      'cipher_data': encrypted_doc
+    }
+    pkcs5 = PKCS5(pkcs5_attrs)
+    asn1_hex = pkcs5.dump_asn1()
+    return (
+      bytes.fromhex(asn1_hex),
+      random_password
+    )

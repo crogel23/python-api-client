@@ -19,7 +19,7 @@ class PKCS5:
   def decrypt_data(self, password):
     key_size = self.__key_size_bytes()
     derived_key = PBE.get_derived_key(password, size=key_size, salt=self.salt, iterations=self.iterations)
-    return AES.decrypt(unhexlify(derived_key), self.cipher_data, self.iv)
+    return AES.decrypt(derived_key, self.cipher_data, self.iv)
 
   def dump_asn1(self):
     hmac_alg = AlgSequence()

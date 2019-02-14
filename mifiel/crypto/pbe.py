@@ -32,6 +32,4 @@ class PBE:
       raise ValueError('PBE.get_derived_key number of iterations too high')
     if size > cls.MAX_KEY_LENGTH:
       raise ValueError('PBE.get_derived_key size requested for key, too high')
-    key = PBKDF2(password, salt, dkLen=size, count=iterations, prf=lambda p,s: HMAC.new(p,s,cls.DEFAULT_DIGEST).digest())
-    key_bytes = binascii.hexlify(key)
-    return key_bytes.decode('utf-8')
+    return PBKDF2(password, salt, dkLen=size, count=iterations, prf=lambda p,s: HMAC.new(p,s,cls.DEFAULT_DIGEST).digest())
