@@ -101,12 +101,11 @@ class Document(Base):
       file_.write(response.text)
 
   def __cipher_doc_secrets(self, master_key, random_password):
-    # Document.__key_derivation(master_key, doc, signer)
-    return
     signatories = {}
     for signer in self.signers:
-      signer_id = signer.id
-      public_key_hex = signer.e2ee.group.e_client.pub
+      signer_id = signer['id']
+      doc_i, signer_i = signer['e2ee']['e_index'].split('/')
+      public_key_hex = Document.__key_derivation(master_key, doc_i, signer_i)
       e_pass = ECIES.encrypt(public_key_hex, random_password)
       signatories[signer_id] = {
         'e_client': {
@@ -118,23 +117,37 @@ class Document(Base):
 
   @staticmethod
   def __key_derivation(master_key, doc, signer):
-    node = master_key.CKDpriv(doc + BIP32_HARDEN).CKDpub(signer)
+    if type(doc) is str:
+      doc = int(doc[:-1]) + BIP32_HARDEN if "'" in doc or 'H' in doc else int(doc)
+    if type(signer) is str:
+      signer = int(signer)
+    node = master_key.CKDpriv(doc).CKDpub(signer)
     return node.PublicKey().hex()
 
   @staticmethod
+  def __key_derivation_from_widget_id(master_key, widget_id):
+    widget_map = widget_id.split('-')
+    signer = widget_map.pop()
+    doc = widget_map.pop()
+    return Document.__key_derivation(master_key, doc, signer)
+
+  @staticmethod
   def __validate_create(client, name, file, dhash, encrypted):
-    if not file and not dhash:
+    neither_file_and_hash = not file and not dhash
+    encrypted_and_empty_master_key = encrypted and client.master_key is None
+    encrypted_and_not_file_or_hash = encrypted and (not file or not dhash)
+    not_encrypted_with_file_and_hash = not encrypted and file and dhash
+    not_encrypted_with_hash_and_empty_name = not encrypted and dhash and not name
+    if encrypted_and_empty_master_key:
+      raise ValueError('Master key is needed to create encrypted documents. client.set_master_key(seed_as_hex_string)')
+    if encrypted_and_not_file_or_hash:
+      raise ValueError('Both file and dhash are required for encrypted documents')
+    if neither_file_and_hash:
       raise ValueError('Either file or hash must be provided')
-    if encrypted:
-      if client.master_key is None:
-        raise ValueError('Master key is needed to create encrypted documents. client.set_master_key(seed_as_hex_string)')
-      elif not file or not dhash:
-        raise ValueError('Both file and dhash are required for encrypted documents')
-    else:
-      if file and dhash:
-        raise ValueError('Only one of file or hash must be provided')
-      if dhash and not name:
-        raise ValueError('A name is required when using hash')
+    if not_encrypted_with_file_and_hash:
+      raise ValueError('Only one of file or hash must be provided')
+    if not_encrypted_with_hash_and_empty_name:
+      raise ValueError('A name is required when using the documents hash')
 
   @staticmethod
   def __prepare_file_to_store(file_path, encrypted):

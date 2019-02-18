@@ -16,7 +16,11 @@ class TestDocument(BaseMifielCase):
       url=url,
       body=json.dumps({
         'id': doc_id,
-        'callback_url': 'some'
+        'callback_url': 'some',
+        'signers': [
+          { 'id': '0ac0c4f7-d3e6-40c1-a079-a0e58db645e6', 'e2ee': { 'e_index': '32\'/0', 'group': { 'e_client': { 'e_pass': None } } } },
+          { 'id': 'ff946596-c4c4-4b89-9990-b50ef6ef7d07', 'e2ee': { 'e_index': '32\'/1', 'group': { 'e_client': { 'e_pass': None } } } }
+        ]
       }),
       status=200,
       content_type='application/json',
@@ -322,8 +326,10 @@ class TestDocument(BaseMifielCase):
   @responses.activate
   def test_encrypted_docs(self):
     doc_id = 'some-doc-id'
-    url = self.client.url().format(path='documents')
-    self.mock_doc_response(responses.POST, url, doc_id)
+    post_url = self.client.url().format(path='documents')
+    put_url = self.client.url().format(path='documents/' + doc_id)
+    self.mock_doc_response(responses.POST, post_url, doc_id)
+    self.mock_doc_response(responses.PUT, put_url, doc_id)
 
     self.client.set_master_key('000102030405060708090a0b0c0d0e0f')
 
@@ -339,8 +345,12 @@ class TestDocument(BaseMifielCase):
       encrypted=True
     )
 
-    req = self.get_last_request()
-    self.assertEqual(req.method, 'POST')
-    self.assertEqual(req.url, url)
+    save_req = responses.calls[0].request
+    update_req = responses.calls[1].request
+    self.assertEqual(save_req.method, 'POST')
+    self.assertEqual(save_req.url, post_url)
+    self.assertEqual(update_req.method, 'PUT')
+    self.assertEqual(update_req.url, put_url)
     self.assertEqual(doc.id, doc_id)
-    assert req.headers['Authorization'] is not None
+    assert save_req.headers['Authorization'] is not None
+    assert update_req.headers['Authorization'] is not None
