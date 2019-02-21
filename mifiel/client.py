@@ -3,11 +3,13 @@ from bip32utils import BIP32Key
 from .api_auth import RequestsApiAuth
 
 class Client:
-  def __init__(self, app_id, secret_key):
+  def __init__(self, app_id, secret_key, master_key=None):
     self.sandbox = False
     self.auth = RequestsApiAuth(app_id, secret_key)
     self.base_url = 'https://www.mifiel.com'
     self.master_key = None
+    if master_key is not None:
+      self.set_master_key(master_key)
 
   def use_sandbox(self):
     self.sandbox = True

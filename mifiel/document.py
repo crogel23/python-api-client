@@ -41,6 +41,7 @@ class Document(Base):
 
     data = sig_numbers
 
+    if encrypted: data['encrypted'] = 'true'
     if callback_url: data['callback_url'] = callback_url
     if file: file, random_password, filehash = Document.__prepare_file_to_store(file, encrypted)
     if dhash or filehash: data['original_hash'] = filehash if encrypted else dhash
@@ -165,7 +166,7 @@ class Document(Base):
     return (
       {'file': (filename, filedata, mimetype)},
       random_password,
-      filehash
+      filehash.hex()
     )
 
   @staticmethod
