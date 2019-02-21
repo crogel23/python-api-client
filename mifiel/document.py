@@ -1,5 +1,6 @@
 import mimetypes
 import requests
+from Crypto.Hash import SHA256
 from bip32utils import BIP32_HARDEN
 from os.path import basename
 from mifiel import Base, Response
@@ -41,8 +42,8 @@ class Document(Base):
     data = sig_numbers
 
     if callback_url: data['callback_url'] = callback_url
-    if file: file, random_password = Document.__prepare_file_to_store(file, encrypted)
-    if dhash: data['original_hash'] = dhash
+    if file: file, random_password, filehash = Document.__prepare_file_to_store(file, encrypted)
+    if dhash or filehash: data['original_hash'] = filehash if encrypted else dhash
     if name: data['name'] = name
 
     doc = Document(client)
@@ -134,14 +135,14 @@ class Document(Base):
   @staticmethod
   def __validate_create(client, name, file, dhash, encrypted):
     neither_file_and_hash = not file and not dhash
+    encrypted_and_not_file = encrypted and not file
     encrypted_and_empty_master_key = encrypted and client.master_key is None
-    encrypted_and_not_file_or_hash = encrypted and (not file or not dhash)
     not_encrypted_with_file_and_hash = not encrypted and file and dhash
     not_encrypted_with_hash_and_empty_name = not encrypted and dhash and not name
     if encrypted_and_empty_master_key:
       raise ValueError('Master key is needed to create encrypted documents. client.set_master_key(seed_as_hex_string)')
-    if encrypted_and_not_file_or_hash:
-      raise ValueError('Both file and dhash are required for encrypted documents')
+    if encrypted_and_not_file:
+      raise ValueError('File is required for encrypted documents')
     if neither_file_and_hash:
       raise ValueError('Either file or hash must be provided')
     if not_encrypted_with_file_and_hash:
@@ -151,27 +152,29 @@ class Document(Base):
 
   @staticmethod
   def __prepare_file_to_store(file_path, encrypted):
+    filehash = None
     random_password = None
-    original_file = open(file_path, 'rb')
-    filename = basename(original_file.name)
+    filedata = open(file_path, 'rb')
+    filename = basename(filedata.name)
     mimetype = 'text/plain' if encrypted else mimetypes.guess_type(file_path)[0]
-    file_data = Document.__encrypt_file(original_file) if encrypted else original_file
     if encrypted:
       filename += '.enc'
-      file_data, random_password = file_data
+      filebytes = filedata.read()
+      filehash = SHA256.new(filebytes).digest()
+      filedata, random_password = Document.__encrypt_file(filebytes)
     return (
-      {'file': (filename, file_data, mimetype)},
-      random_password
+      {'file': (filename, filedata, mimetype)},
+      random_password,
+      filehash
     )
 
   @staticmethod
-  def __encrypt_file(file):
+  def __encrypt_file(filedata):
     random_iv = AES.random_iv()
     random_salt = PBE.random_salt()
     random_password = PBE.random_password()
     derived_key = PBE.get_derived_key(random_password, salt=random_salt)
-    file_bytes = file.read()
-    encrypted_doc = AES.encrypt(derived_key, file_bytes, random_iv)
+    encrypted_doc = AES.encrypt(derived_key, filedata, random_iv)
     pkcs5_attrs = {
       'iv': random_iv,
       'salt': random_salt,

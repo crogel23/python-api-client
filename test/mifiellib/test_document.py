@@ -300,7 +300,6 @@ class TestDocument(BaseMifielCase):
         client=self.client,
         signatories=signatories,
         file='test/fixtures/example.pdf',
-        dhash='f4dee35b52fc06aa9d47f6297c7cff51e8bcebf90683da234a07ed507dafd57b',
         encrypted=True
       )
 
@@ -310,16 +309,6 @@ class TestDocument(BaseMifielCase):
       Document.create(
         client=self.client,
         signatories=signatories,
-        dhash='some-sha256-hash',
-        encrypted=True
-      )
-
-    # Hash needed
-    with self.assertRaises(ValueError):
-      Document.create(
-        client=self.client,
-        signatories=signatories,
-        file='test/fixtures/example.pdf',
         encrypted=True
       )
 
